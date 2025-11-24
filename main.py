@@ -43,13 +43,10 @@ def get_recent_fda_data(endpoint_type, days=7):
         # 构建查询参数
         params = {"limit": 10}
 
-        # 对于 enforcement 数据，添加日期过滤
+        # 对于 enforcement 数据，不添加日期过滤，直接获取最新的
+        # 因为日期过滤可能导致查询失败
         if endpoint_type == "enforcement":
-            date_str = start_date.strftime("%Y%m%d")
-            params["search"] = (
-                f"report_date:[{date_str}+TO+{end_date.strftime('%Y%m%d')}]"
-            )
-            params["limit"] = 100  # enforcement 数据可能较少，增加限制
+            params["limit"] = 100  # 获取更多数据
 
         logger.info(f"正在请求 {endpoint_type} 数据，参数: {params}")
         response = requests.get(endpoint, params=params, timeout=30)
@@ -239,11 +236,11 @@ def main():
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 定义要获取的数据类型
+        # 定义要获取的数据类型 - 先获取容易成功的
         report_types = [
-            ("enforcement", "警告信"),
-            ("drugs", "药品不良事件"),
             ("label", "药品标签"),
+            ("drugs", "药品不良事件"),
+            ("enforcement", "警告信"),
         ]
 
         for endpoint_type, report_name in report_types:
