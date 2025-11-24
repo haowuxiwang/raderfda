@@ -74,7 +74,7 @@ def get_recent_fda_data(endpoint_type, days=7):
 
 
 def format_message(data, report_type):
-    """格式化消息内容"""
+    """格式化消息内容 - 参考 trendrader 风格"""
     try:
         if not data or "results" not in data:
             logger.warning(f"{report_type} 数据为空或格式不正确")
@@ -87,29 +87,75 @@ def format_message(data, report_type):
             logger.info(f"{report_type} 没有新数据")
             return None
 
-        # 构建消息文本
-        text_lines = [f"📊 FDA {report_type} 最新数据更新"]
-        text_lines.append(f"共 {total} 条记录\n")
+        # 根据类型选择 emoji
+        emoji_map = {"药品不良事件": "⚠️", "警告信": "🚨", "药品标签": "💊"}
+        emoji = emoji_map.get(report_type, "📊")
 
-        for i, item in enumerate(results[:5], 1):  # 只显示前5条
+        # 构建消息文本
+        text_lines = [f"{emoji} FDA {report_type} 最新数据更新"]
+        text_lines.append(f"共 {total} 条记录")
+        text_lines.append("")  # 空行
+
+        for i, item in enumerate(results[:10], 1):  # 显示前10条
             if report_type == "药品不良事件":
-                drug_name = (
+                # 获取药品名称
+                patient = item.get("patient", {})
+                drugs = patient.get("drug", [])
+                if drugs:
+                    drug_name = drugs[0].get("medicinalproduct", "未知药品")
+                else:
+                    drug_name = "未知药品"
+
+                # 获取严重性
+                serious = item.get("serious", "未知")
+                reaction = (
                     item.get("patient", {})
-                    .get("drug", [{}])[0]
-                    .get("medicinalproduct", "未知药品")
+                    .get("reaction", [{}])[0]
+                    .get("reactionmeddrapt", "")
                 )
+
                 text_lines.append(f"{i}. {drug_name}")
+                if reaction:
+                    text_lines.append(f"   反应: {reaction}")
+
             elif report_type == "警告信":
-                product = item.get("product_description", "未知产品")
-                reason = item.get("reason_for_recall", "未说明")
-                text_lines.append(f"{i}. {product[:50]}... - {reason[:30]}...")
+                # 产品描述
+                product = item.get("product_description", "未知产品")[:80]
+                # 召回原因
+                reason = item.get("reason_for_recall", "未说明")[:50]
+                # 召回日期
+                recall_date = item.get("report_date", "")
+                # 分类
+                classification = item.get("classification", "")
+
+                text_lines.append(f"{i}. {product}")
+                text_lines.append(f"   原因: {reason}")
+                if recall_date:
+                    text_lines.append(f"   日期: {recall_date}")
+                if classification:
+                    text_lines.append(f"   级别: Class {classification}")
+
             elif report_type == "药品标签":
-                brand_name = (
-                    item.get("openfda", {}).get("brand_name", ["未知"])[0]
-                    if item.get("openfda", {}).get("brand_name")
-                    else "未知"
-                )
+                # 品牌名称
+                openfda = item.get("openfda", {})
+                brand_names = openfda.get("brand_name", [])
+                brand_name = brand_names[0] if brand_names else "未知"
+
+                # 通用名称
+                generic_names = openfda.get("generic_name", [])
+                generic_name = generic_names[0] if generic_names else ""
+
+                # 制造商
+                manufacturers = openfda.get("manufacturer_name", [])
+                manufacturer = manufacturers[0] if manufacturers else ""
+
                 text_lines.append(f"{i}. {brand_name}")
+                if generic_name:
+                    text_lines.append(f"   通用名: {generic_name}")
+                if manufacturer:
+                    text_lines.append(f"   制造商: {manufacturer[:40]}")
+
+            text_lines.append("")  # 每条记录后空行
 
         formatted_text = "\n".join(text_lines)
         logger.info(f"成功格式化 {report_type} 消息")
