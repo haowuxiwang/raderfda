@@ -4,6 +4,8 @@ on:
   schedule:
     # 每天北京时间上午 9:00 运行 (UTC 1:00)
     - cron: '0 1 * * *'
+    # 每天北京时间下午 2:00 运行 (UTC 6:00)
+    - cron: '0 6 * * *'
   workflow_dispatch:  # 允许手动触发
 
 jobs:
@@ -25,4 +27,15 @@ jobs:
         pip install -r requirements.txt
     
     - name: 运行 FDA 数据获取脚本
+      env:
+        FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+        TZ: 'Asia/Shanghai'
       run: python main.py
+    
+    - name: 上传日志
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: fda-logs
+        path: logs/*.log
+        retention-days: 7

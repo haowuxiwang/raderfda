@@ -9,8 +9,11 @@
   - 警告信（召回信息）
   - 药品标签信息
 - 🤖 自动推送到飞书机器人
-- ⏰ 每天定时运行（北京时间上午 9:00）
+- ⏰ 每天定时运行（北京时间上午 9:00 和下午 2:00）
 - 🔧 支持手动触发
+- 🔐 环境变量安全管理 Webhook
+- 📝 完整的日志记录
+- ⚠️ 错误自动通知
 
 ## 快速开始
 
@@ -27,24 +30,44 @@ git remote add origin <你的仓库地址>
 git push -u origin main
 ```
 
-### 2. 配置说明
+### 2. 配置 GitHub Secrets（推荐）
 
-飞书 Webhook 已经硬编码在 `main.py` 中，如果需要修改，请编辑：
+为了安全起见，建议将飞书 Webhook URL 配置为 GitHub Secret：
 
-```python
-FEISHU_WEBHOOK = "你的飞书 Webhook URL"
+1. 进入 GitHub 仓库
+2. 点击 `Settings` > `Secrets and variables` > `Actions`
+3. 点击 `New repository secret`
+4. Name: `FEISHU_WEBHOOK`
+5. Value: 你的飞书 Webhook URL
+6. 点击 `Add secret`
+
+如果不配置 Secret，代码会使用默认的 Webhook URL（已在代码中设置）。
+
+### 3. 本地测试（可选）
+
+在上传到 GitHub 之前，可以先本地测试：
+
+```bash
+# 安装依赖
+pip install -r requirements.txt
+
+# 运行脚本
+python main.py
 ```
 
-### 3. 手动触发测试
+查看 `logs/` 目录下的日志文件了解执行详情。
+
+### 4. 手动触发测试
 
 1. 进入 GitHub 仓库
 2. 点击 `Actions` 标签
 3. 选择 `FDA 数据推送` workflow
 4. 点击 `Run workflow` 按钮
 
-### 4. 查看运行日志
+### 5. 查看运行日志
 
-在 Actions 页面可以查看每次运行的详细日志。
+- **GitHub Actions 日志**: 在 Actions 页面查看每次运行的控制台输出
+- **下载详细日志**: 在 Actions 运行详情页面，可以下载 `fda-logs` 文件（保留 7 天）
 
 ## 项目结构
 
@@ -53,8 +76,10 @@ FEISHU_WEBHOOK = "你的飞书 Webhook URL"
 ├── .github/
 │   └── workflows/
 │       └── fda_notification.yml  # GitHub Actions 配置
+├── logs/                          # 日志目录（自动创建）
 ├── main.py                        # 主程序
 ├── requirements.txt               # Python 依赖
+├── .gitignore                     # Git 忽略文件
 └── README.md                      # 项目说明
 ```
 
@@ -74,8 +99,11 @@ FEISHU_WEBHOOK = "你的飞书 Webhook URL"
 
 ```yaml
 schedule:
-  - cron: '0 1 * * *'  # UTC 时间，对应北京时间 9:00
+  - cron: '0 1 * * *'  # UTC 1:00 = 北京时间 9:00
+  - cron: '0 6 * * *'  # UTC 6:00 = 北京时间 14:00
 ```
+
+时区说明：GitHub Actions 使用 UTC 时间，北京时间 = UTC + 8 小时
 
 ### 修改数据获取天数
 
@@ -94,11 +122,19 @@ data = get_recent_fda_data(endpoint_type, days=7)  # 获取最近 7 天的数据
 
 更多 API 信息请访问: https://open.fda.gov/
 
+## 错误处理
+
+- 任务执行失败时会自动发送错误通知到飞书
+- 所有错误都会记录在日志文件中
+- 日志文件会上传到 GitHub Actions Artifacts（保留 7 天）
+
 ## 注意事项
 
 - OpenFDA API 有速率限制（每分钟 240 次请求，无需 API Key）
 - GitHub Actions 免费版每月有 2000 分钟的运行时间限制
 - 确保飞书 Webhook 地址正确且有效
+- 建议使用 GitHub Secrets 管理敏感信息
+- 日志文件按日期命名，便于追踪历史记录
 
 ## License
 
