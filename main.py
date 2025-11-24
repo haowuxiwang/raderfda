@@ -17,11 +17,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 飞书 Webhook URL - 优先从环境变量读取
-FEISHU_WEBHOOK = os.getenv(
-    "FEISHU_WEBHOOK",
-    "https://www.feishu.cn/flow/api/trigger-webhook/91a7f21ac0cd8653b9317601466b5c26",
-)
+# 飞书 Webhook URL - 从环境变量读取（必须配置）
+FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK")
 
 # OpenFDA API 端点
 OPENFDA_ENDPOINTS = {
