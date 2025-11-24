@@ -162,24 +162,163 @@ def format_message(data, report_type):
         return None
 
 
+def format_message_with_links(data, report_type):
+    """格式化消息内容 - 带链接的富文本格式"""
+    try:
+        if not data or "results" not in data:
+            logger.warning(f"{report_type} 数据为空或格式不正确")
+            return None
+
+        results = data["results"]
+        total = len(results)
+
+        if total == 0:
+            logger.info(f"{report_type} 没有新数据")
+            return None
+
+        # 构建富文本内容
+        content_blocks = []
+
+        # 标题行
+        content_blocks.append([{"tag": "text", "text": f"共 {total} 条记录\n\n"}])
+
+        for i, item in enumerate(results[:10], 1):  # 显示前10条
+            block = []
+
+            if report_type == "药品不良事件":
+                patient = item.get("patient", {})
+                drugs = patient.get("drug", [])
+                drug_name = (
+                    drugs[0].get("medicinalproduct", "未知药品")
+                    if drugs
+                    else "未知药品"
+                )
+                reactions = patient.get("reaction", [])
+                reaction = reactions[0].get("reactionmeddrapt", "") if reactions else ""
+
+                search_url = f"https://open.fda.gov/apis/drug/event/"
+
+                block.append({"tag": "text", "text": f"{i}. "})
+                block.append({"tag": "a", "text": drug_name, "href": search_url})
+                if reaction:
+                    block.append({"tag": "text", "text": f"\n   反应: {reaction}"})
+                block.append({"tag": "text", "text": "\n\n"})
+
+            elif report_type == "警告信":
+                product = item.get("product_description", "未知产品")[:80]
+                reason = item.get("reason_for_recall", "未说明")[:50]
+                recall_date = item.get("report_date", "")
+                classification = item.get("classification", "")
+                enforcement_url = f"https://open.fda.gov/apis/drug/enforcement/"
+
+                block.append({"tag": "text", "text": f"{i}. "})
+                block.append({"tag": "a", "text": product, "href": enforcement_url})
+                block.append({"tag": "text", "text": f"\n   原因: {reason}"})
+                if recall_date:
+                    block.append({"tag": "text", "text": f"\n   日期: {recall_date}"})
+                if classification:
+                    block.append(
+                        {"tag": "text", "text": f"\n   级别: Class {classification}"}
+                    )
+                block.append({"tag": "text", "text": "\n\n"})
+
+            elif report_type == "药品标签":
+                openfda = item.get("openfda", {})
+                brand_names = openfda.get("brand_name", [])
+                brand_name = brand_names[0] if brand_names else "未知"
+                generic_names = openfda.get("generic_name", [])
+                generic_name = generic_names[0] if generic_names else ""
+                manufacturers = openfda.get("manufacturer_name", [])
+                manufacturer = manufacturers[0] if manufacturers else ""
+                label_url = f"https://open.fda.gov/apis/drug/label/"
+
+                block.append({"tag": "text", "text": f"{i}. "})
+                block.append({"tag": "a", "text": brand_name, "href": label_url})
+                if generic_name:
+                    block.append(
+                        {"tag": "text", "text": f"\n   通用名: {generic_name}"}
+                    )
+                if manufacturer:
+                    block.append(
+                        {"tag": "text", "text": f"\n   制造商: {manufacturer[:40]}"}
+                    )
+                block.append({"tag": "text", "text": "\n\n"})
+
+            content_blocks.append(block)
+
+        logger.info(f"成功格式化 {report_type} 消息（富文本格式）")
+        return content_blocks
+    except Exception as e:
+        logger.error(f"格式化 {report_type} 消息时出错: {str(e)}", exc_info=True)
+        return None
+
+
 def send_to_feishu(total_titles, timestamp, report_type, text):
-    """发送消息到飞书"""
+    """发送消息到飞书 - 使用富文本格式支持链接"""
     if not FEISHU_WEBHOOK:
         logger.error("飞书 Webhook URL 未配置")
         return False
 
+    # 使用富文本格式，支持链接
     payload = {
-        "message_type": "text",
+        "msg_type": "post",
         "content": {
-            "total_titles": str(total_titles),
-            "timestamp": str(timestamp),
-            "report_type": str(report_type),
-            "text": str(text),
+            "post": {
+                "zh_cn": {
+                    "title": f"{report_type} - {total_titles} 条记录",
+                    "content": [
+                        [{"tag": "text", "text": f"⏰ 更新时间: {timestamp}\n\n{text}"}]
+                    ],
+                }
+            }
         },
     }
 
     try:
         logger.info(f"正在发送 {report_type} 消息到飞书...")
+        response = requests.post(FEISHU_WEBHOOK, json=payload, timeout=10)
+        response.raise_for_status()
+
+        result = response.json()
+        logger.info(f"✅ 成功发送 {report_type} 消息到飞书，响应: {result}")
+        return True
+    except requests.exceptions.Timeout:
+        logger.error(f"❌ 发送 {report_type} 消息超时")
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ 发送 {report_type} 消息失败: {str(e)}")
+        return False
+    except Exception as e:
+        logger.error(
+            f"❌ 发送 {report_type} 消息时发生未知错误: {str(e)}", exc_info=True
+        )
+        return False
+
+
+def send_to_feishu_rich(total_titles, timestamp, report_type, content_blocks):
+    """发送富文本消息到飞书 - 支持链接"""
+    if not FEISHU_WEBHOOK:
+        logger.error("飞书 Webhook URL 未配置")
+        return False
+
+    # 根据类型选择 emoji
+    emoji_map = {"药品不良事件": "⚠️", "警告信": "🚨", "药品标签": "💊"}
+    emoji = emoji_map.get(report_type, "📊")
+
+    payload = {
+        "msg_type": "post",
+        "content": {
+            "post": {
+                "zh_cn": {
+                    "title": f"{emoji} {report_type} - {total_titles} 条",
+                    "content": content_blocks,
+                }
+            }
+        },
+    }
+
+    try:
+        logger.info(f"正在发送 {report_type} 富文本消息到飞书...")
         response = requests.post(FEISHU_WEBHOOK, json=payload, timeout=10)
         response.raise_for_status()
 
@@ -206,12 +345,19 @@ def send_error_notification(error_message):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     payload = {
-        "message_type": "text",
+        "msg_type": "post",
         "content": {
-            "total_titles": "0",
-            "timestamp": timestamp,
-            "report_type": "系统错误",
-            "text": f"⚠️ FDA 数据推送任务执行失败\n\n错误信息:\n{error_message}",
+            "post": {
+                "zh_cn": {
+                    "title": "⚠️ 系统错误",
+                    "content": [
+                        [
+                            {"tag": "text", "text": f"时间: {timestamp}\n\n"},
+                            {"tag": "text", "text": f"错误信息:\n{error_message}"},
+                        ]
+                    ],
+                }
+            }
         },
     }
 
@@ -252,14 +398,14 @@ def main():
                 data = get_recent_fda_data(endpoint_type)
 
                 if data:
-                    text = format_message(data, report_name)
-                    if text:
+                    content_blocks = format_message_with_links(data, report_name)
+                    if content_blocks:
                         total = len(data.get("results", []))
-                        if send_to_feishu(
+                        if send_to_feishu_rich(
                             total_titles=str(total),
                             timestamp=timestamp,
                             report_type=report_name,
-                            text=text,
+                            content_blocks=content_blocks,
                         ):
                             success_count += 1
                         else:
