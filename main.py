@@ -305,20 +305,33 @@ def send_to_feishu_rich(total_titles, timestamp, report_type, content_blocks):
     emoji_map = {"药品不良事件": "⚠️", "警告信": "🚨", "药品标签": "💊"}
     emoji = emoji_map.get(report_type, "📊")
 
+    # 将 content_blocks 转换为纯文本（因为飞书 Webhook 可能不支持富文本）
+    text_lines = [f"{emoji} FDA {report_type} 最新数据"]
+    text_lines.append(f"共 {total_titles} 条记录")
+    text_lines.append(f"更新时间: {timestamp}\n")
+
+    for block in content_blocks[1:]:  # 跳过第一个标题块
+        for item in block:
+            if item["tag"] == "text":
+                text_lines.append(item["text"].rstrip("\n"))
+            elif item["tag"] == "a":
+                # 将链接格式化为文本
+                text_lines.append(f"{item['text']} ({item['href']})")
+
+    text = "\n".join(text_lines)
+
     payload = {
-        "msg_type": "post",
+        "message_type": "text",
         "content": {
-            "post": {
-                "zh_cn": {
-                    "title": f"{emoji} {report_type} - {total_titles} 条",
-                    "content": content_blocks,
-                }
-            }
+            "total_titles": str(total_titles),
+            "timestamp": timestamp,
+            "report_type": report_type,
+            "text": text,
         },
     }
 
     try:
-        logger.info(f"正在发送 {report_type} 富文本消息到飞书...")
+        logger.info(f"正在发送 {report_type} 消息到飞书...")
         response = requests.post(FEISHU_WEBHOOK, json=payload, timeout=10)
         response.raise_for_status()
 
