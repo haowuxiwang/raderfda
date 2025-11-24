@@ -49,6 +49,7 @@ def get_recent_fda_data(endpoint_type, days=7):
             params["search"] = (
                 f"report_date:[{date_str}+TO+{end_date.strftime('%Y%m%d')}]"
             )
+            params["limit"] = 100  # enforcement 数据可能较少，增加限制
 
         logger.info(f"正在请求 {endpoint_type} 数据，参数: {params}")
         response = requests.get(endpoint, params=params, timeout=30)
@@ -125,13 +126,10 @@ def send_to_feishu(total_titles, timestamp, report_type, text):
         return False
 
     payload = {
-        "message_type": "text",
-        "content": {
-            "total_titles": total_titles,
-            "timestamp": timestamp,
-            "report_type": report_type,
-            "text": text,
-        },
+        "total_count": total_titles,
+        "timestamp": timestamp,
+        "report_type": report_type,
+        "message_content": text,
     }
 
     try:
@@ -162,13 +160,10 @@ def send_error_notification(error_message):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     payload = {
-        "message_type": "text",
-        "content": {
-            "total_titles": "0",
-            "timestamp": timestamp,
-            "report_type": "系统错误",
-            "text": f"⚠️ FDA 数据推送任务执行失败\n\n错误信息:\n{error_message}",
-        },
+        "total_count": "0",
+        "timestamp": timestamp,
+        "report_type": "系统错误",
+        "message_content": f"⚠️ FDA 数据推送任务执行失败\n\n错误信息:\n{error_message}",
     }
 
     try:
