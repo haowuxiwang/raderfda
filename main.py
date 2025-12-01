@@ -40,13 +40,22 @@ def get_recent_fda_data(endpoint_type, days=7):
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
-        # 构建查询参数
+        # 构建查询参数 - 按日期排序获取最新数据
         params = {"limit": 10}
 
-        # 对于 enforcement 数据，不添加日期过滤，直接获取最新的
-        # 因为日期过滤可能导致查询失败
+        # 根据不同类型设置排序和过滤
         if endpoint_type == "enforcement":
-            params["limit"] = 100  # 获取更多数据
+            # enforcement 按 report_date 降序排序
+            params["sort"] = "report_date:desc"
+            params["limit"] = 10
+        elif endpoint_type == "drugs":
+            # drug event 按 receivedate 降序排序
+            params["sort"] = "receivedate:desc"
+            params["limit"] = 10
+        elif endpoint_type == "label":
+            # label 按 effective_time 降序排序
+            params["sort"] = "effective_time:desc"
+            params["limit"] = 10
 
         logger.info(f"正在请求 {endpoint_type} 数据，参数: {params}")
         response = requests.get(endpoint, params=params, timeout=30)
@@ -165,6 +174,8 @@ def format_message(data, report_type):
 def format_message_with_links(data, report_type):
     """格式化消息内容 - 带链接的富文本格式"""
     try:
+        import urllib.parse
+
         if not data or "results" not in data:
             logger.warning(f"{report_type} 数据为空或格式不正确")
             return None
@@ -196,12 +207,23 @@ def format_message_with_links(data, report_type):
                 reactions = patient.get("reaction", [])
                 reaction = reactions[0].get("reactionmeddrapt", "") if reactions else ""
 
-                search_url = f"https://open.fda.gov/apis/drug/event/"
+                # 获取接收日期
+                receive_date = item.get("receivedate", "")
+                if receive_date and len(receive_date) >= 8:
+                    receive_date = (
+                        f"{receive_date[:4]}-{receive_date[4:6]}-{receive_date[6:8]}"
+                    )
+
+                # 构建搜索链接
+                search_term = urllib.parse.quote(drug_name)
+                search_url = f"https://api.fda.gov/drug/event.json?search=patient.drug.medicinalproduct:{search_term}&limit=1"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": drug_name, "href": search_url})
                 if reaction:
                     block.append({"tag": "text", "text": f"\n   反应: {reaction}"})
+                if receive_date:
+                    block.append({"tag": "text", "text": f"\n   日期: {receive_date}"})
                 block.append({"tag": "text", "text": "\n\n"})
 
             elif report_type == "警告信":
@@ -209,7 +231,14 @@ def format_message_with_links(data, report_type):
                 reason = item.get("reason_for_recall", "未说明")[:50]
                 recall_date = item.get("report_date", "")
                 classification = item.get("classification", "")
-                enforcement_url = f"https://open.fda.gov/apis/drug/enforcement/"
+                recall_number = item.get("recall_number", "")
+
+                # 构建链接
+                if recall_number:
+                    enforcement_url = f"https://api.fda.gov/drug/enforcement.json?search=recall_number:{recall_number}"
+                else:
+                    search_term = urllib.parse.quote(product[:30])
+                    enforcement_url = f"https://api.fda.gov/drug/enforcement.json?search=product_description:{search_term}&limit=1"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": product, "href": enforcement_url})
@@ -230,7 +259,15 @@ def format_message_with_links(data, report_type):
                 generic_name = generic_names[0] if generic_names else ""
                 manufacturers = openfda.get("manufacturer_name", [])
                 manufacturer = manufacturers[0] if manufacturers else ""
-                label_url = f"https://open.fda.gov/apis/drug/label/"
+
+                # 获取生效日期
+                effective_time = item.get("effective_time", "")
+                if effective_time and len(effective_time) >= 8:
+                    effective_time = f"{effective_time[:4]}-{effective_time[4:6]}-{effective_time[6:8]}"
+
+                # 构建链接
+                search_term = urllib.parse.quote(brand_name)
+                label_url = f"https://api.fda.gov/drug/label.json?search=openfda.brand_name:{search_term}&limit=1"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": brand_name, "href": label_url})
@@ -241,6 +278,10 @@ def format_message_with_links(data, report_type):
                 if manufacturer:
                     block.append(
                         {"tag": "text", "text": f"\n   制造商: {manufacturer[:40]}"}
+                    )
+                if effective_time:
+                    block.append(
+                        {"tag": "text", "text": f"\n   生效日期: {effective_time}"}
                     )
                 block.append({"tag": "text", "text": "\n\n"})
 
