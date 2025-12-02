@@ -214,8 +214,11 @@ def format_message_with_links(data, report_type):
                         f"{receive_date[:4]}-{receive_date[4:6]}-{receive_date[6:8]}"
                     )
 
-                # 构建 FDA 官网链接
-                search_url = "https://www.fda.gov/drugs/questions-and-answers-fdas-adverse-event-reporting-system-faers/fda-adverse-event-reporting-system-faers-public-dashboard"
+                # 构建 Drugs.com 搜索链接（更友好的药品信息网站）
+                search_term = urllib.parse.quote(drug_name)
+                search_url = (
+                    f"https://www.drugs.com/search.php?searchterm={search_term}"
+                )
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": drug_name, "href": search_url})
@@ -232,8 +235,9 @@ def format_message_with_links(data, report_type):
                 classification = item.get("classification", "")
                 recall_number = item.get("recall_number", "")
 
-                # 构建 FDA 官网召回链接
-                enforcement_url = "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts"
+                # 构建 FDA 召回搜索链接
+                search_term = urllib.parse.quote(product[:50])
+                enforcement_url = f"https://www.fda.gov/search?s={search_term}"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": product, "href": enforcement_url})
