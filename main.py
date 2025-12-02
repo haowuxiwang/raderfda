@@ -214,11 +214,15 @@ def format_message_with_links(data, report_type):
                         f"{receive_date[:4]}-{receive_date[4:6]}-{receive_date[6:8]}"
                     )
 
-                # 构建 Drugs.com 搜索链接（更友好的药品信息网站）
-                search_term = urllib.parse.quote(drug_name)
-                search_url = (
-                    f"https://www.drugs.com/search.php?searchterm={search_term}"
-                )
+                # 获取 safety report id
+                safetyreportid = item.get("safetyreportid", "")
+
+                # 构建 OpenFDA 查看器链接
+                if safetyreportid:
+                    search_url = f"https://open.fda.gov/apis/drug/event/explore/?search=safetyreportid:{safetyreportid}"
+                else:
+                    search_term = urllib.parse.quote(drug_name)
+                    search_url = f"https://open.fda.gov/apis/drug/event/explore/?search=patient.drug.medicinalproduct:{search_term}"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": drug_name, "href": search_url})
@@ -226,6 +230,10 @@ def format_message_with_links(data, report_type):
                     block.append({"tag": "text", "text": f"\n   反应: {reaction}"})
                 if receive_date:
                     block.append({"tag": "text", "text": f"\n   日期: {receive_date}"})
+                if safetyreportid:
+                    block.append(
+                        {"tag": "text", "text": f"\n   报告ID: {safetyreportid}"}
+                    )
                 block.append({"tag": "text", "text": "\n\n"})
 
             elif report_type == "警告信":
@@ -235,9 +243,12 @@ def format_message_with_links(data, report_type):
                 classification = item.get("classification", "")
                 recall_number = item.get("recall_number", "")
 
-                # 构建 FDA 召回搜索链接
-                search_term = urllib.parse.quote(product[:50])
-                enforcement_url = f"https://www.fda.gov/search?s={search_term}"
+                # 构建 OpenFDA 查看器链接
+                if recall_number:
+                    enforcement_url = f"https://open.fda.gov/apis/drug/enforcement/explore/?search=recall_number:{recall_number}"
+                else:
+                    search_term = urllib.parse.quote(product[:50])
+                    enforcement_url = f"https://open.fda.gov/apis/drug/enforcement/explore/?search=product_description:{search_term}"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": product, "href": enforcement_url})
@@ -268,9 +279,15 @@ def format_message_with_links(data, report_type):
                 if effective_time and len(effective_time) >= 8:
                     effective_time = f"{effective_time[:4]}-{effective_time[4:6]}-{effective_time[6:8]}"
 
-                # 构建 DailyMed 链接（FDA 官方药品标签数据库）
-                search_term = urllib.parse.quote(brand_name)
-                label_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={search_term}"
+                # 获取 set_id（药品标签的唯一标识）
+                set_id = item.get("set_id", "")
+
+                # 构建链接
+                if set_id:
+                    label_url = f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={set_id}"
+                else:
+                    search_term = urllib.parse.quote(brand_name)
+                    label_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={search_term}"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": brand_name, "href": label_url})
