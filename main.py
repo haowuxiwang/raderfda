@@ -214,9 +214,8 @@ def format_message_with_links(data, report_type):
                         f"{receive_date[:4]}-{receive_date[4:6]}-{receive_date[6:8]}"
                     )
 
-                # 构建搜索链接
-                search_term = urllib.parse.quote(drug_name)
-                search_url = f"https://api.fda.gov/drug/event.json?search=patient.drug.medicinalproduct:{search_term}&limit=1"
+                # 构建 FDA 官网链接
+                search_url = "https://www.fda.gov/drugs/questions-and-answers-fdas-adverse-event-reporting-system-faers/fda-adverse-event-reporting-system-faers-public-dashboard"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": drug_name, "href": search_url})
@@ -233,12 +232,8 @@ def format_message_with_links(data, report_type):
                 classification = item.get("classification", "")
                 recall_number = item.get("recall_number", "")
 
-                # 构建链接
-                if recall_number:
-                    enforcement_url = f"https://api.fda.gov/drug/enforcement.json?search=recall_number:{recall_number}"
-                else:
-                    search_term = urllib.parse.quote(product[:30])
-                    enforcement_url = f"https://api.fda.gov/drug/enforcement.json?search=product_description:{search_term}&limit=1"
+                # 构建 FDA 官网召回链接
+                enforcement_url = "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": product, "href": enforcement_url})
@@ -248,6 +243,10 @@ def format_message_with_links(data, report_type):
                 if classification:
                     block.append(
                         {"tag": "text", "text": f"\n   级别: Class {classification}"}
+                    )
+                if recall_number:
+                    block.append(
+                        {"tag": "text", "text": f"\n   召回编号: {recall_number}"}
                     )
                 block.append({"tag": "text", "text": "\n\n"})
 
@@ -265,9 +264,9 @@ def format_message_with_links(data, report_type):
                 if effective_time and len(effective_time) >= 8:
                     effective_time = f"{effective_time[:4]}-{effective_time[4:6]}-{effective_time[6:8]}"
 
-                # 构建链接
+                # 构建 DailyMed 链接（FDA 官方药品标签数据库）
                 search_term = urllib.parse.quote(brand_name)
-                label_url = f"https://api.fda.gov/drug/label.json?search=openfda.brand_name:{search_term}&limit=1"
+                label_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={search_term}"
 
                 block.append({"tag": "text", "text": f"{i}. "})
                 block.append({"tag": "a", "text": brand_name, "href": label_url})
